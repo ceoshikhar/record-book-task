@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useDispatch } from "react-redux";
 import { AgGridReact } from "ag-grid-react";
 import {
     ModuleRegistry,
@@ -17,10 +18,9 @@ import {
 
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
-import { PerformanceTracker } from "@/components/PerformanceTracker";
-import TrackedCellRenderer from "@/components/TrackedCellRenderer";
-import { useDispatch } from "react-redux";
 import { colMounted, colUnmounted } from "@/store/perfSlice";
+import { PerformanceTracker } from "@/components/PerformanceTracker";
+import { TrackedCellRenderer } from "@/components/TrackedCellRenderer";
 
 ModuleRegistry.registerModules([
     ColumnApiModule,
