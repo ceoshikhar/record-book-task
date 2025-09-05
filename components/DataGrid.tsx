@@ -11,13 +11,18 @@ import {
     GridReadyEvent,
     IDatasource,
     ColumnApiModule,
+    RowApiModule,
 } from "ag-grid-community";
 
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
+import { PerformanceTracker } from "@/components/PerformanceTracker";
+import TrackedCellRenderer from "@/components/TrackedCellRenderer";
+
 ModuleRegistry.registerModules([
-    InfiniteRowModelModule,
     ColumnApiModule,
+    RowApiModule,
+    InfiniteRowModelModule,
     ...(process.env.NODE_ENV !== "production" ? [ValidationModule] : []), // IDK what this does but it was in the example. Maybe bettter console error logs?
 ]);
 
@@ -69,21 +74,18 @@ export function DataGrid() {
                         `/api/data?rowPage=${rowPage}&colPage=${colPage}&rowsPerPage=${ROWS_PER_PAGE}&colsPerPage=${COLS_PER_PAGE}`
                     );
                     const apiData: ApiResponse = await res.json();
-                    const colDefs = apiData.colDefs;
+                    const colDefs = apiData.colDefs.map((col) => ({
+                        ...col,
+                        cellRenderer: TrackedCellRenderer,
+                    }));
                     setColumnDefs(colDefs);
-
-                    // Calculate slice within the fetched page
-                    const start = gridParams.startRow % ROWS_PER_PAGE;
-                    const end =
-                        start + (gridParams.endRow - gridParams.startRow);
-                    const rowsThisPage = apiData.rows.slice(start, end);
 
                     let lastRow = -1;
                     if (gridParams.endRow >= apiData.meta.totalRows) {
                         lastRow = apiData.meta.totalRows;
                     }
 
-                    gridParams.successCallback(rowsThisPage, lastRow);
+                    gridParams.successCallback(apiData.rows, lastRow);
                 } catch {
                     gridParams.failCallback();
                 }
@@ -93,7 +95,7 @@ export function DataGrid() {
     }, []);
 
     const onBodyScrollEnd = useCallback(
-        (event: BodyScrollEndEvent) => {
+        async (event: BodyScrollEndEvent) => {
             // We ignore vertical scrolls because this callback
             // is to handle column (horizontal) pagination.
             if (event.direction === "vertical") return;
@@ -104,47 +106,46 @@ export function DataGrid() {
             const lastCol = displayed[displayed.length - 1];
             const lastColId = lastCol.getColId();
 
-            // The ID of the last column we have in memory
             const lastLoadedCol = columnDefs[columnDefs.length - 1];
 
             if (lastColId === lastLoadedCol.field) {
                 const nextPage = colPageRef.current + 1;
 
-                fetch(
+                const res = await fetch(
                     `/api/data?rowPage=0&colPage=${nextPage}&rowsPerPage=${ROWS_PER_PAGE}&colsPerPage=${COLS_PER_PAGE}`
-                )
-                    .then((r) => r.json())
-                    .then((apiData) => {
-                        setColumnDefs((prev) => [...prev, ...apiData.colDefs]);
+                );
+                const apiData: ApiResponse = await res.json();
+                const colDefs = apiData.colDefs.map((col) => ({
+                    ...col,
+                    cellRenderer: TrackedCellRenderer,
+                }));
+                setColumnDefs(colDefs);
+                colPageRef.current = nextPage;
+                setColPage(nextPage);
 
-                        colPageRef.current = nextPage;
-                        setColPage(nextPage);
-
-                        // Force the grid to have the data for all cells in the new columns.
-                        event.api.refreshInfiniteCache();
-                    });
+                // Force the grid to have the data for all cells in the new columns.
+                event.api.refreshInfiniteCache();
             }
         },
         [columnDefs]
     );
 
     return (
-        <div style={{ width: "100vw", height: "100vh" }}>
+        <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
             <div style={{ width: "100%", height: "100%" }}>
                 <AgGridReact
                     columnDefs={columnDefs}
                     defaultColDef={defaultColDef}
-                    rowBuffer={0}
+                    rowBuffer={10}
                     rowModelType={"infinite"}
                     cacheBlockSize={100}
-                    cacheOverflowSize={2}
-                    maxConcurrentDatasourceRequests={1}
-                    infiniteInitialRowCount={1000}
                     maxBlocksInCache={10}
                     onGridReady={onGridReady}
                     onBodyScrollEnd={onBodyScrollEnd}
                 />
             </div>
+
+            <PerformanceTracker />
         </div>
     );
 }
