@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -98,51 +98,60 @@ export function DataGrid() {
 
     const largestEndRow = useRef(0);
 
-    const onGridReady = useCallback((event: GridReadyEvent) => {
-        const dataSource: IDatasource = {
-            rowCount: undefined,
-            getRows: async (gridParams) => {
-                const rowPage = Math.floor(gridParams.startRow / ROWS_PER_PAGE);
-                const colPage = colPageRef.current;
-
-                console.log("fetching page…", {
-                    rowPage,
-                    colPage,
-                });
-
-                try {
-                    const res = await fetch(
-                        `/api/data?rowPage=${rowPage}&colPage=${colPage}&rowsPerPage=${ROWS_PER_PAGE}&colsPerPage=${COLS_PER_PAGE}`
+    const onGridReady = useCallback(
+        (event: GridReadyEvent) => {
+            const dataSource: IDatasource = {
+                rowCount: undefined,
+                getRows: async (gridParams) => {
+                    const rowPage = Math.floor(
+                        gridParams.startRow / ROWS_PER_PAGE
                     );
-                    const apiData: ApiResponse = await res.json();
-                    const colDefs = apiData.colDefs.map((col) => ({
-                        ...col,
-                        cellRenderer: TrackedCellRenderer,
-                    }));
+                    const colPage = colPageRef.current;
 
-                    setColumnDefs(colDefs);
-                    dispatch(colsInMemory(colDefs.length));
+                    console.log("fetching page…", {
+                        rowPage,
+                        colPage,
+                    });
 
-                    let lastRow = -1;
-                    if (gridParams.endRow >= apiData.meta.totalRows) {
-                        lastRow = apiData.meta.totalRows;
+                    const skeletonRows = Array.from(
+                        { length: gridParams.endRow - gridParams.startRow },
+                        () => ({ __loading__: true })
+                    );
+
+                    gridParams.successCallback(skeletonRows, -1);
+
+                    try {
+                        const res = await fetch(
+                            `/api/data?rowPage=${rowPage}&colPage=${colPage}&rowsPerPage=${ROWS_PER_PAGE}&colsPerPage=${COLS_PER_PAGE}`
+                        );
+
+                        const apiData: ApiResponse = await res.json();
+
+                        setColumnDefs(apiData.colDefs);
+                        dispatch(colsInMemory(apiData.colDefs.length));
+
+                        let lastRow = -1;
+                        if (gridParams.endRow >= apiData.meta.totalRows) {
+                            lastRow = apiData.meta.totalRows;
+                        }
+
+                        if (gridParams.endRow > largestEndRow.current) {
+                            largestEndRow.current = gridParams.endRow;
+                        }
+
+                        dispatch(rowsInMemory(largestEndRow.current));
+
+                        gridParams.successCallback(apiData.rows, lastRow);
+                    } catch {
+                        gridParams.failCallback();
                     }
+                },
+            };
 
-                    if (gridParams.endRow > largestEndRow.current) {
-                        largestEndRow.current = gridParams.endRow;
-                    }
-
-                    dispatch(rowsInMemory(largestEndRow.current));
-
-                    gridParams.successCallback(apiData.rows, lastRow);
-                } catch {
-                    gridParams.failCallback();
-                }
-            },
-        };
-
-        event.api.setGridOption("datasource", dataSource);
-    }, []);
+            event.api.setGridOption("datasource", dataSource);
+        },
+        [dispatch]
+    );
 
     const onBodyScrollEnd = useCallback(
         async (event: BodyScrollEndEvent) => {
@@ -164,16 +173,13 @@ export function DataGrid() {
                 const res = await fetch(
                     `/api/data?rowPage=0&colPage=${nextPage}&rowsPerPage=${ROWS_PER_PAGE}&colsPerPage=${COLS_PER_PAGE}`
                 );
+
                 const apiData: ApiResponse = await res.json();
-                const colDefs = apiData.colDefs.map((col) => ({
-                    ...col,
-                    cellRenderer: TrackedCellRenderer,
-                }));
-                setColumnDefs(colDefs);
+                setColumnDefs(apiData.colDefs);
+
                 colPageRef.current = nextPage;
                 setColPage(nextPage);
 
-                // Force the grid to have the data for all cells in the new columns.
                 event.api.refreshInfiniteCache();
             }
         },
@@ -184,7 +190,13 @@ export function DataGrid() {
         <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
             <div style={{ width: "100%", height: "100%" }}>
                 <AgGridReact
-                    columnDefs={columnDefs}
+                    columnDefs={columnDefs.map(
+                        (col) =>
+                            ({
+                                ...col,
+                                cellRenderer: TrackedCellRenderer,
+                            } as ColDef)
+                    )}
                     defaultColDef={defaultColDef}
                     rowBuffer={10}
                     rowModelType={"infinite"}
