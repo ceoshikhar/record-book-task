@@ -15,6 +15,8 @@ export function PerformanceTracker() {
             <div>Rows unmounted: {stats.rowsUnmounted}</div>
             <div>Cols mounted: {stats.colsMounted}</div>
             <div>Cols unmounted: {stats.colsUnmounted}</div>
+            <div>Rows in memory: {stats.rowsInMemory}</div>
+            <div>Cols in memory: {stats.colsInMemory}</div>
         </div>
     );
 }

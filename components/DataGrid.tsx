@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -18,7 +18,12 @@ import {
 
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
-import { colMounted, colUnmounted } from "@/store/perfSlice";
+import {
+    colMounted,
+    colsInMemory,
+    colUnmounted,
+    rowsInMemory,
+} from "@/store/perfSlice";
 import { PerformanceTracker } from "@/components/PerformanceTracker";
 import { TrackedCellRenderer } from "@/components/TrackedCellRenderer";
 
@@ -91,6 +96,8 @@ export function DataGrid() {
         [dispatch]
     );
 
+    const largestEndRow = useRef(0);
+
     const onGridReady = useCallback((event: GridReadyEvent) => {
         const dataSource: IDatasource = {
             rowCount: undefined,
@@ -112,12 +119,20 @@ export function DataGrid() {
                         ...col,
                         cellRenderer: TrackedCellRenderer,
                     }));
+
                     setColumnDefs(colDefs);
+                    dispatch(colsInMemory(colDefs.length));
 
                     let lastRow = -1;
                     if (gridParams.endRow >= apiData.meta.totalRows) {
                         lastRow = apiData.meta.totalRows;
                     }
+
+                    if (gridParams.endRow > largestEndRow.current) {
+                        largestEndRow.current = gridParams.endRow;
+                    }
+
+                    dispatch(rowsInMemory(largestEndRow.current));
 
                     gridParams.successCallback(apiData.rows, lastRow);
                 } catch {

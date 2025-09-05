@@ -1,23 +1,27 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export interface PerfState {
+    activeRowCells: Record<string, number>;
     cellsMounted: number;
     cellsUnmounted: number;
     rowsMounted: number;
     rowsUnmounted: number;
     colsMounted: number;
     colsUnmounted: number;
-    activeRowCells: Record<string, number>;
+    rowsInMemory: number;
+    colsInMemory: number;
 }
 
 const initialState: PerfState = {
+    activeRowCells: {},
     cellsMounted: 0,
     cellsUnmounted: 0,
     rowsMounted: 0,
     rowsUnmounted: 0,
     colsMounted: 0,
     colsUnmounted: 0,
-    activeRowCells: {},
+    rowsInMemory: 0,
+    colsInMemory: 0,
 };
 
 const perfSlice = createSlice({
@@ -28,10 +32,13 @@ const perfSlice = createSlice({
             state.cellsMounted++;
 
             const rowId = action.payload.rowId;
+
+            // Check if we have already rendered a cell for this row.
             if (!state.activeRowCells[rowId]) {
                 state.activeRowCells[rowId] = 0;
-                state.rowsMounted++; // first cell => row mounted
+                state.rowsMounted++;
             }
+
             state.activeRowCells[rowId]++;
         },
         cellUnmounted(state, action: PayloadAction<{ rowId: string }>) {
@@ -40,9 +47,11 @@ const perfSlice = createSlice({
             const rowId = action.payload.rowId;
             if (state.activeRowCells[rowId]) {
                 state.activeRowCells[rowId]--;
+
+                // Have we unmounted all cells for this row?
                 if (state.activeRowCells[rowId] === 0) {
                     delete state.activeRowCells[rowId];
-                    state.rowsUnmounted++; // last cell gone => row unmounted
+                    state.rowsUnmounted++;
                 }
             }
         },
@@ -52,13 +61,22 @@ const perfSlice = createSlice({
         colUnmounted(state) {
             state.colsUnmounted++;
         },
-        reset(state) {
-            Object.assign(state, initialState);
+        rowsInMemory(state, action: PayloadAction<number>) {
+            state.rowsInMemory = action.payload;
+        },
+        colsInMemory(state, action: PayloadAction<number>) {
+            state.colsInMemory = action.payload;
         },
     },
 });
 
-export const { cellMounted, cellUnmounted, colMounted, colUnmounted, reset } =
-    perfSlice.actions;
+export const {
+    cellMounted,
+    cellUnmounted,
+    colMounted,
+    colUnmounted,
+    rowsInMemory,
+    colsInMemory,
+} = perfSlice.actions;
 
 export default perfSlice.reducer;
