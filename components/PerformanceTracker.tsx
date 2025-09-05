@@ -1,7 +1,8 @@
 "use client";
 
 import { useSelector } from "react-redux";
-import { RootState } from "../store";
+
+import { RootState } from "@/store";
 
 export function PerformanceTracker() {
     const stats = useSelector((state: RootState) => state.perf);

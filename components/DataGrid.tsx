@@ -12,12 +12,15 @@ import {
     IDatasource,
     ColumnApiModule,
     RowApiModule,
+    VirtualColumnsChangedEvent,
 } from "ag-grid-community";
 
 import "ag-grid-community/styles/ag-theme-alpine.css";
 
 import { PerformanceTracker } from "@/components/PerformanceTracker";
 import TrackedCellRenderer from "@/components/TrackedCellRenderer";
+import { useDispatch } from "react-redux";
+import { colMounted, colUnmounted } from "@/store/perfSlice";
 
 ModuleRegistry.registerModules([
     ColumnApiModule,
@@ -43,6 +46,8 @@ const ROWS_PER_PAGE = 100;
 const COLS_PER_PAGE = 20;
 
 export function DataGrid() {
+    const dispatch = useDispatch();
+
     const [colPage, setColPage] = useState(0);
     const colPageRef = useRef(colPage);
     colPageRef.current = colPage;
@@ -56,6 +61,35 @@ export function DataGrid() {
             sortable: false,
         };
     }, []);
+
+    const prevDisplayedColsRef = useRef<string[]>([]);
+
+    const onVirtualColumnsChanged = useCallback(
+        (event: VirtualColumnsChangedEvent<unknown>) => {
+            const displayedCols = event.api
+                .getAllDisplayedVirtualColumns()
+                .map((col: any) => col.getColId());
+
+            const prevDisplayedCols = prevDisplayedColsRef.current;
+
+            // Newly mounted columns.
+            displayedCols.forEach((id) => {
+                if (!prevDisplayedCols.includes(id)) {
+                    dispatch(colMounted());
+                }
+            });
+
+            // Unmounted columns.
+            prevDisplayedCols.forEach((id) => {
+                if (!displayedCols.includes(id)) {
+                    dispatch(colUnmounted());
+                }
+            });
+
+            prevDisplayedColsRef.current = displayedCols;
+        },
+        [dispatch]
+    );
 
     const onGridReady = useCallback((event: GridReadyEvent) => {
         const dataSource: IDatasource = {
@@ -91,6 +125,7 @@ export function DataGrid() {
                 }
             },
         };
+
         event.api.setGridOption("datasource", dataSource);
     }, []);
 
@@ -142,6 +177,7 @@ export function DataGrid() {
                     maxBlocksInCache={10}
                     onGridReady={onGridReady}
                     onBodyScrollEnd={onBodyScrollEnd}
+                    onVirtualColumnsChanged={onVirtualColumnsChanged}
                 />
             </div>
 
