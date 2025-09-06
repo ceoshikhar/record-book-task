@@ -54,8 +54,8 @@ type ApiResponse = {
     };
 };
 
-const ROWS_PER_PAGE = 1000;
-const COLS_PER_PAGE = 30;
+const ROWS_PER_PAGE = 100;
+const COLS_PER_PAGE = 20;
 const ROW_BUFFER = 10;
 
 export function DataGrid() {
@@ -234,16 +234,29 @@ export function DataGrid() {
                 const visibleRows = grid.api.getRenderedNodes();
                 if (!visibleRows?.length) return;
 
-                const visisbleRowIds: string[] = [];
+                const visisbleRowIds: number[] = [];
                 visibleRows.forEach((row) =>
-                    visisbleRowIds.push(row.data.id.toString())
+                    visisbleRowIds.push(Number(row.data.id))
                 );
+
+                const visibleRowStartID = visisbleRowIds[0];
+                const visibleRowEndID =
+                    visisbleRowIds[visisbleRowIds.length - 1];
 
                 let randomIdIdx = Math.floor(
                     Math.random() * visisbleRowIds.length
                 );
 
-                if (randomIdIdx > visibleRows.length - ROW_BUFFER) {
+                // As we render buffer of 100 rows, we want to make sure
+                // we are selecting a row that is fully visible.
+                const rowIdAtRandomIdx = visisbleRowIds[randomIdIdx];
+                if (rowIdAtRandomIdx < visibleRowStartID + ROW_BUFFER) {
+                    randomIdIdx = randomIdIdx + ROW_BUFFER + 2;
+                } else if (rowIdAtRandomIdx > visibleRowEndID - ROW_BUFFER) {
+                    randomIdIdx = randomIdIdx - ROW_BUFFER - 2;
+                }
+
+                if (randomIdIdx > visibleRows.length - ROW_BUFFER / 2) {
                     randomIdIdx = randomIdIdx - ROW_BUFFER;
                 }
 
@@ -251,6 +264,8 @@ export function DataGrid() {
                 const randomField =
                     visibleCols[Math.floor(Math.random() * visibleCols.length)];
 
+                // Sending the update event with a row ID and column field that is
+                // currently in the viewport, so that it's easier to see the updates.
                 const update = {
                     id: randomId,
                     field: randomField,
@@ -297,7 +312,7 @@ export function DataGrid() {
                     defaultColDef={defaultColDef}
                     rowBuffer={ROW_BUFFER}
                     rowModelType={"infinite"}
-                    cacheBlockSize={1000}
+                    cacheBlockSize={ROWS_PER_PAGE}
                     maxBlocksInCache={10}
                     onGridReady={onGridReady}
                     onBodyScrollEnd={onBodyScrollEnd}

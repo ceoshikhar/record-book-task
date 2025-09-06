@@ -30,6 +30,8 @@ npm run build
 npm run start
 ```
 
+Visit http://localhost:3000
+
 ## Learn more
 
 > "A short document (max 1 page)" - consider the part below as this "Short document".

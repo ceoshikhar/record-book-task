@@ -25,7 +25,12 @@ export async function GET(req: NextRequest) {
     const startCol = 0; // Always starting from the first column for simplicity.
     const endCol = Math.min(startCol + colsPerPage * (colPage + 1), TOTAL_COLS);
 
-    const colDefs = [];
+    const colDefs = [
+        {
+            field: "id",
+            headerName: "ID",
+        },
+    ];
 
     for (let c = startCol; c < endCol; c++) {
         colDefs.push({
