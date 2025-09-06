@@ -17,6 +17,9 @@ import {
     EventApiModule,
     HighlightChangesModule,
     ScrollApiModule,
+    TextEditorModule,
+    CellValueChangedEvent,
+    GridApi,
 } from "ag-grid-community";
 
 import "ag-grid-community/styles/ag-theme-alpine.css";
@@ -38,6 +41,7 @@ ModuleRegistry.registerModules([
     EventApiModule,
     HighlightChangesModule,
     ScrollApiModule,
+    TextEditorModule,
     ...(process.env.NODE_ENV !== "production" ? [ValidationModule] : []), // IDK what this does but it was in the example. Maybe bettter console error logs?
 ]);
 
@@ -62,6 +66,7 @@ export function DataGrid() {
     const dispatch = useDispatch();
 
     const gridRef = useRef<AgGridReact | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
 
     const [colPage, setColPage] = useState(0);
     const colPageLatestRef = useLatest(colPage);
@@ -74,6 +79,7 @@ export function DataGrid() {
             flex: 1,
             minWidth: 169,
             sortable: false,
+            editable: true,
         };
     }, []);
 
@@ -196,84 +202,28 @@ export function DataGrid() {
         [colPageLatestRef, columnDefs]
     );
 
-    function highlightCell(rowId: number, colId: string) {
-        const rowNode = gridRef.current?.api.getRowNode(rowId.toString());
-        if (!rowNode) return;
+    const onCellValueChanged = useCallback(
+        (event: CellValueChangedEvent<unknown, any, any>) => {
+            const update = {
+                id: (event.data as any).id,
+                field: event.colDef.field,
+                value: event.newValue,
+            };
 
-        gridRef.current?.api.flashCells({
-            rowNodes: [rowNode],
-            columns: [colId],
-        });
-    }
+            // Send to WebSocket server so that it can broadcast it to all clients.
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify(update));
+            }
+        },
+        []
+    );
 
     useEffect(() => {
-        const grid = gridRef.current;
-
         const ws = new WebSocket("ws://localhost:8080");
+        wsRef.current = ws;
 
         ws.onopen = () => {
             console.log("✅ WebSocket connected");
-
-            if (!grid) return;
-
-            // Simulate updates every 3s (for demo only)
-            setInterval(() => {
-                const visibleCols: string[] = [];
-
-                const range = grid.api.getHorizontalPixelRange();
-                grid.api.getAllDisplayedVirtualColumns().forEach((col: any) => {
-                    const left = col.getLeft();
-                    const right = left + col.getActualWidth();
-
-                    // Make sure that the column is fully visible.
-                    if (left > range.left && right < range.right) {
-                        visibleCols.push(col.getColId());
-                    }
-                });
-
-                const visibleRows = grid.api.getRenderedNodes();
-                if (!visibleRows?.length) return;
-
-                const visisbleRowIds: number[] = [];
-                visibleRows.forEach((row) =>
-                    visisbleRowIds.push(Number(row.data.id))
-                );
-
-                const visibleRowStartID = visisbleRowIds[0];
-                const visibleRowEndID =
-                    visisbleRowIds[visisbleRowIds.length - 1];
-
-                let randomIdIdx = Math.floor(
-                    Math.random() * visisbleRowIds.length
-                );
-
-                // As we render buffer of 100 rows, we want to make sure
-                // we are selecting a row that is fully visible.
-                const rowIdAtRandomIdx = visisbleRowIds[randomIdIdx];
-                if (rowIdAtRandomIdx < visibleRowStartID + ROW_BUFFER) {
-                    randomIdIdx = randomIdIdx + ROW_BUFFER + 2;
-                } else if (rowIdAtRandomIdx > visibleRowEndID - ROW_BUFFER) {
-                    randomIdIdx = randomIdIdx - ROW_BUFFER - 2;
-                }
-
-                if (randomIdIdx > visibleRows.length - ROW_BUFFER / 2) {
-                    randomIdIdx = randomIdIdx - ROW_BUFFER;
-                }
-
-                const randomId = visisbleRowIds[randomIdIdx];
-                const randomField =
-                    visibleCols[Math.floor(Math.random() * visibleCols.length)];
-
-                // Sending the update event with a row ID and column field that is
-                // currently in the viewport, so that it's easier to see the updates.
-                const update = {
-                    id: randomId,
-                    field: randomField,
-                    value: (Math.random() * 100).toFixed(2),
-                };
-
-                ws.send(JSON.stringify(update));
-            }, 3000);
         };
 
         ws.onmessage = (event) => {
@@ -289,7 +239,7 @@ export function DataGrid() {
                     rowNode.setDataValue(data.field, data.value);
 
                     // Highlight the updated cell
-                    highlightCell(data.id, data.field);
+                    highlightCell(gridRef.current?.api, data.id, data.field);
                 }
             }
         };
@@ -317,10 +267,21 @@ export function DataGrid() {
                     onGridReady={onGridReady}
                     onBodyScrollEnd={onBodyScrollEnd}
                     onVirtualColumnsChanged={onVirtualColumnsChanged}
+                    onCellValueChanged={onCellValueChanged}
                 />
             </div>
 
             <PerformanceTracker />
         </div>
     );
+}
+
+function highlightCell(gridApi: GridApi<any>, rowId: number, colId: string) {
+    const rowNode = gridApi.getRowNode(rowId.toString());
+    if (!rowNode) return;
+
+    gridApi.flashCells({
+        rowNodes: [rowNode],
+        columns: [colId],
+    });
 }
