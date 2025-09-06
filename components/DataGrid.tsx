@@ -54,8 +54,8 @@ type ApiResponse = {
     };
 };
 
-const ROWS_PER_PAGE = 100;
-const COLS_PER_PAGE = 20;
+const ROWS_PER_PAGE = 1000;
+const COLS_PER_PAGE = 30;
 const ROW_BUFFER = 10;
 
 export function DataGrid() {
@@ -297,7 +297,7 @@ export function DataGrid() {
                     defaultColDef={defaultColDef}
                     rowBuffer={ROW_BUFFER}
                     rowModelType={"infinite"}
-                    cacheBlockSize={100}
+                    cacheBlockSize={1000}
                     maxBlocksInCache={10}
                     onGridReady={onGridReady}
                     onBodyScrollEnd={onBodyScrollEnd}

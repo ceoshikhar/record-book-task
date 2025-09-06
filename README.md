@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Record Book
 
-## Getting Started
+> I would have deployed the NextJS app for quick testing but because we have to spin up our own WebSocket server for real-time updates, we will have to run it locally.
 
-First, run the development server:
+## Run it locally
+
+1. First make sure to install all dependencies.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Start the WebSocket server.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> It just echos back the message from the client.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+node websocket-server.js
+```
 
-## Learn More
+3. Build the NextJS app for production so that we have best performance.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. Start the NextJS server.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run start
+```
 
-## Deploy on Vercel
+## Learn more
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+> "A short document (max 1 page)" - consider the part below as this "Short document".
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+I tried to follow the mentioned libraries/tools in the assignemnt to match the requirements as close as possible.
+
+#### Dataset API
+
+I created an API route that returns the data needed to render in the table. Every row page returns 1000 rows and every col page returns 30 new cols. The rows are capped at 300k and cols at 300.
+
+#### Table
+
+AG Grid was mentioned, so I used it. This was the first time I used this library.
+
+Although it was mentioned that we could do a custom implementation, a true custom implementation of virtualized rows and columns rendering in a table might be impossible. But if it meant using something else other than AG Grid and then combine those tools to build our own stuff then I would have gone with something from TanStack - ReactTable, ReactVirtualized and probable ReactQuery.
+
+#### Table data fetching from API
+
+ReactQuery was mentioned in the assignment doc, as I was trying out different ways to render AG Grid for infinite scrolling (2d), initially there was a usecase for ReactQuery but then I later settled with the onGridReady API where we set the `dataSource` with a `getRows` function, then AG Grid took care of managing the rows data.
+
+#### Virtualiztion
+
+AG Grid is doing all the heavy lifting for performance. Rows and Columns are virtualized. We load more rows when we reach the bottom of the table and more cols when we reach the right end of the table.
+
+Buffer is explicitly set to `10` for rows but for cols there was no API with AG Grid but I believe it's rendering 3 extra cols outside the viewport.
+
+#### Performance Tracking
+
+Made use of Redux Toolkit for a store/slice for the state that was being tracked for performance.
+
+Initial thought I had was to use Context but then I thought it might hinder the performance if the entire Grid might start to re-render unnecessarily when the perf state was chaning and as ReduxToolkit was mentioned, I used it. Although I usually go for something like Zustand.
+
+#### Real‑time Updates
+
+Created a simple Node WebSocket server that just echos back the data.
+
+I had to use the echoing back strategy because otherwise I would have to keep sending the current grid place (visible rows and cols) to the WebSocket and then do the random picking of cell on the WebSocket server, but instead I picked a random Cell on the client (NextJS app) and then simulated a realtime event came from the WebSocket.
+
+Again, AG Grid provided APIs to update a cell and show a flash when we updated that cell.
+
+#### Loading skeleton
+
+The initial render shows an empty table. I would have preferred to find a way to generate "fake" rows and cols (leading to fake cells) and shown the skeleton.
+
+But when more rows are loading, there is a loading skeleton shown in the cells that are still loading.
+
+But when more cols are loaded, then we have to "backfill" the rows that we have already rendered with the data of the new cols we just fetched so I did that by just refreshing the cache data which leads to the entire table (all cells) showing loading skeleton until the data is loaded.
+
+I don't think this the best UX, I'd have prefered to show only the new cols to show loading skeleton as the cols for the earlier rows already have data. I probably couldn't find the correct AG Grid API to do the backfilling correctly.
