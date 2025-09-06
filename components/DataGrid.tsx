@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -14,6 +14,9 @@ import {
     ColumnApiModule,
     RowApiModule,
     VirtualColumnsChangedEvent,
+    EventApiModule,
+    HighlightChangesModule,
+    ScrollApiModule,
 } from "ag-grid-community";
 
 import "ag-grid-community/styles/ag-theme-alpine.css";
@@ -26,11 +29,15 @@ import {
 } from "@/store/perfSlice";
 import { PerformanceTracker } from "@/components/PerformanceTracker";
 import { TrackedCellRenderer } from "@/components/TrackedCellRenderer";
+import { useLatest } from "@/hooks/useLatest";
 
 ModuleRegistry.registerModules([
     ColumnApiModule,
     RowApiModule,
     InfiniteRowModelModule,
+    EventApiModule,
+    HighlightChangesModule,
+    ScrollApiModule,
     ...(process.env.NODE_ENV !== "production" ? [ValidationModule] : []), // IDK what this does but it was in the example. Maybe bettter console error logs?
 ]);
 
@@ -49,15 +56,18 @@ type ApiResponse = {
 
 const ROWS_PER_PAGE = 100;
 const COLS_PER_PAGE = 20;
+const ROW_BUFFER = 10;
 
 export function DataGrid() {
     const dispatch = useDispatch();
 
+    const gridRef = useRef<AgGridReact | null>(null);
+
     const [colPage, setColPage] = useState(0);
-    const colPageRef = useRef(colPage);
-    colPageRef.current = colPage;
+    const colPageLatestRef = useLatest(colPage);
 
     const [columnDefs, setColumnDefs] = useState<ColDef[]>([]);
+    const columnDefsLatestRef = useLatest(columnDefs);
 
     const defaultColDef = useMemo<ColDef>(() => {
         return {
@@ -106,7 +116,7 @@ export function DataGrid() {
                     const rowPage = Math.floor(
                         gridParams.startRow / ROWS_PER_PAGE
                     );
-                    const colPage = colPageRef.current;
+                    const colPage = colPageLatestRef.current;
 
                     console.log("fetching page…", {
                         rowPage,
@@ -150,7 +160,7 @@ export function DataGrid() {
 
             event.api.setGridOption("datasource", dataSource);
         },
-        [dispatch]
+        [colPageLatestRef, dispatch]
     );
 
     const onBodyScrollEnd = useCallback(
@@ -168,7 +178,7 @@ export function DataGrid() {
             const lastLoadedCol = columnDefs[columnDefs.length - 1];
 
             if (lastColId === lastLoadedCol.field) {
-                const nextPage = colPageRef.current + 1;
+                const nextPage = colPageLatestRef.current + 1;
 
                 const res = await fetch(
                     `/api/data?rowPage=0&colPage=${nextPage}&rowsPerPage=${ROWS_PER_PAGE}&colsPerPage=${COLS_PER_PAGE}`
@@ -177,19 +187,106 @@ export function DataGrid() {
                 const apiData: ApiResponse = await res.json();
                 setColumnDefs(apiData.colDefs);
 
-                colPageRef.current = nextPage;
+                colPageLatestRef.current = nextPage;
                 setColPage(nextPage);
 
                 event.api.refreshInfiniteCache();
             }
         },
-        [columnDefs]
+        [colPageLatestRef, columnDefs]
     );
+
+    function highlightCell(rowId: number, colId: string) {
+        const rowNode = gridRef.current?.api.getRowNode(rowId.toString());
+        if (!rowNode) return;
+
+        gridRef.current?.api.flashCells({
+            rowNodes: [rowNode],
+            columns: [colId],
+        });
+    }
+
+    useEffect(() => {
+        const grid = gridRef.current;
+
+        const ws = new WebSocket("ws://localhost:8080");
+
+        ws.onopen = () => {
+            console.log("✅ WebSocket connected");
+
+            if (!grid) return;
+
+            // Simulate updates every 3s (for demo only)
+            setInterval(() => {
+                const visibleCols: string[] = [];
+
+                const range = grid.api.getHorizontalPixelRange();
+                grid.api.getAllDisplayedVirtualColumns().forEach((col: any) => {
+                    const left = col.getLeft();
+                    const right = left + col.getActualWidth();
+
+                    // Make sure that the column is fully visible.
+                    if (left > range.left && right < range.right) {
+                        visibleCols.push(col.getColId());
+                    }
+                });
+
+                const visibleRows = grid.api.getRenderedNodes();
+                if (!visibleRows?.length) return;
+
+                const visisbleRowIds: string[] = [];
+                visibleRows.forEach((row) =>
+                    visisbleRowIds.push(row.data.id.toString())
+                );
+
+                let randomIdIdx = Math.floor(
+                    Math.random() * visisbleRowIds.length
+                );
+
+                if (randomIdIdx > visibleRows.length - ROW_BUFFER) {
+                    randomIdIdx = randomIdIdx - ROW_BUFFER;
+                }
+
+                const randomId = visisbleRowIds[randomIdIdx];
+                const randomField =
+                    visibleCols[Math.floor(Math.random() * visibleCols.length)];
+
+                const update = {
+                    id: randomId,
+                    field: randomField,
+                    value: (Math.random() * 100).toFixed(2),
+                };
+
+                ws.send(JSON.stringify(update));
+            }, 3000);
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log("WebSocket message:", data);
+
+            if (gridRef.current?.api) {
+                const rowNode = gridRef.current.api.getRowNode(
+                    data.id.toString()
+                );
+
+                if (rowNode) {
+                    rowNode.setDataValue(data.field, data.value);
+
+                    // Highlight the updated cell
+                    highlightCell(data.id, data.field);
+                }
+            }
+        };
+
+        return () => ws.close();
+    }, [columnDefsLatestRef]);
 
     return (
         <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
             <div style={{ width: "100%", height: "100%" }}>
                 <AgGridReact
+                    ref={gridRef}
                     columnDefs={columnDefs.map(
                         (col) =>
                             ({
@@ -198,7 +295,7 @@ export function DataGrid() {
                             } as ColDef)
                     )}
                     defaultColDef={defaultColDef}
-                    rowBuffer={10}
+                    rowBuffer={ROW_BUFFER}
                     rowModelType={"infinite"}
                     cacheBlockSize={100}
                     maxBlocksInCache={10}
