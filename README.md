@@ -38,33 +38,33 @@ Visit http://localhost:3000
 
 I tried to follow the mentioned libraries/tools in the assignemnt to match the requirements as close as possible.
 
-#### Dataset API
+### Dataset API
 
-I created an API route that returns the data needed to render in the table. Every row page returns 1000 rows and every col page returns 30 new cols. The rows are capped at 300k and cols at 300.
+I created an API route that returns the rows and colDefs needed to render the table. The rows are capped at 300k and cols at 300.
 
-#### Table
+### Table
 
 AG Grid was mentioned, so I used it. This was the first time I used this library.
 
 Although it was mentioned that we could do a custom implementation, a true custom implementation of virtualized rows and columns rendering in a table might be impossible. But if it meant using something else other than AG Grid and then combine those tools to build our own stuff then I would have gone with something from TanStack - ReactTable, ReactVirtualized and probable ReactQuery.
 
-#### Table data fetching from API
+### Table data fetching from API
 
 ReactQuery was mentioned in the assignment doc, as I was trying out different ways to render AG Grid for infinite scrolling (2d), initially there was a usecase for ReactQuery but then I later settled with the onGridReady API where we set the `dataSource` with a `getRows` function, then AG Grid took care of managing the rows data.
 
-#### Virtualiztion
+### Virtualiztion
 
 AG Grid is doing all the heavy lifting for performance. Rows and Columns are virtualized. We load more rows when we reach the bottom of the table and more cols when we reach the right end of the table.
 
 Buffer is explicitly set to `10` for rows but for cols there was no API with AG Grid but I believe it's rendering 3 extra cols outside the viewport.
 
-#### Performance Tracking
+### Performance Tracking
 
 Made use of Redux Toolkit for a store/slice for the state that was being tracked for performance.
 
 Initial thought I had was to use Context but then I thought it might hinder the performance if the entire Grid might start to re-render unnecessarily when the perf state was chaning and as ReduxToolkit was mentioned, I used it. Although I usually go for something like Zustand.
 
-#### Real‑time Updates
+### Real‑time Updates
 
 Created a simple Node WebSocket server that just echos back the data.
 
@@ -72,7 +72,7 @@ I had to use the echoing back strategy because otherwise I would have to keep se
 
 Again, AG Grid provided APIs to update a cell and show a flash when we updated that cell.
 
-#### Loading skeleton
+### Loading skeleton
 
 The initial render shows an empty table. I would have preferred to find a way to generate "fake" rows and cols (leading to fake cells) and shown the skeleton.
 
