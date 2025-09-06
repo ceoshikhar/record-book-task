@@ -66,9 +66,7 @@ Initial thought I had was to use Context but then I thought it might hinder the 
 
 ### Real‑time Updates
 
-Created a simple Node WebSocket server that just echos back the data.
-
-I had to use the echoing back strategy because otherwise I would have to keep sending the current grid place (visible rows and cols) to the WebSocket and then do the random picking of cell on the WebSocket server, but instead I picked a random Cell on the client (NextJS app) and then simulated a realtime event came from the WebSocket.
+Created a simple Node WebSocket server that recieves update events from a client and then it broadcasts it to all connected clients.
 
 Again, AG Grid provided APIs to update a cell and show a flash when we updated that cell.
 
