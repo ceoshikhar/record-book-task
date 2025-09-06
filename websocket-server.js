@@ -7,11 +7,9 @@ wss.on("connection", (ws) => {
 
     ws.on("message", (msg) => {
         console.log("📩 Received:", msg.toString());
-        console.log("Clients size:", wss.clients.size);
 
         // Broadcast the received message to all other connected clients.
         wss.clients.forEach((client) => {
-            console.log("Client readyState:", client.readyState);
             if (client !== ws && client.readyState === WebSocket.OPEN) {
                 client.send(msg.toString());
             }
